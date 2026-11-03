@@ -8,11 +8,7 @@
   node_bundler = "esbuild"
   external_node_modules = ["pg-native"]
 
-# /api/anything  ->  the Express app inside netlify/functions/api.js
-[[redirects]]
-  from   = "/api/*"
-  to     = "/.netlify/functions/api/:splat"
-  status = 200
+# /api/anything  ->  the Express app inside netlify/functions/api.mjs (routed by its `config.path`)
 
 [[headers]]
   for = "/*"

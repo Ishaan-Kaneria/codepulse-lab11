@@ -1,4 +1,4 @@
-// server/app.js - the Express REST API. Used by server/index.js (local) and netlify/functions/api.js (deployed).
+// server/app.js - the Express REST API. Used by server/index.js (local) and netlify/functions/api.mjs (deployed).
 const express = require('express');
 const path = require('path');
 const { run, pool } = require('./db');

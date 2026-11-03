@@ -49,7 +49,8 @@ codepulse/
 │   ├── index.html
 │   ├── css/style.css
 │   └── js/core.js, js/app.js
-├── netlify/functions/api.js  # wraps the same Express app as a Netlify Function
+├── netlify/functions/api.mjs # wraps the same Express app as a Netlify Function (v2)
+├── netlify/database/migrations/ # the two SQL files, applied to Netlify Database on deploy
 ├── scripts/
 │   ├── test-connection.js    # prints SELECT version()                      <- Lab 11 A
 │   └── load-db.js            # loads db/*.sql into any database (e.g. Neon)
@@ -106,7 +107,7 @@ so the live site needs a hosted PostgreSQL database. Neon's free plan works well
 5. **Deploy**, or use **Trigger deploy → Clear cache and deploy site** if you added the variable after the first deploy.
    Open the site: the sidebar badge should say **Live · neondb · 42 tables**.
 
-Requests on the deployed site take this path: `https://your-site.netlify.app/api/...` → `netlify.toml` redirect → `netlify/functions/api.js` → same Express app → `pg` → Neon.
+Requests on the deployed site take this path: `https://your-site.netlify.app/api/...` → `netlify/functions/api.mjs` → same Express app → `pg` → Netlify Database (PostgreSQL, `NETLIFY_DB_URL`).
 
 ---
 
