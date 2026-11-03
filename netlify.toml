@@ -1,0 +1,21 @@
+# Netlify: the /public folder is the website, and the Express API runs as one Netlify Function.
+[build]
+  publish   = "public"
+  functions = "netlify/functions"
+  command   = "echo 'No build step needed'"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["pg-native"]
+
+# /api/anything  ->  the Express app inside netlify/functions/api.js
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

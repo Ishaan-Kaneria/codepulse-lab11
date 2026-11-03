@@ -1,0 +1,24 @@
+{
+  "name": "CodePulse · Node 22 + PostgreSQL 16",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [3000, 5432],
+  "portsAttributes": {
+    "3000": { "label": "CodePulse web app", "onAutoForward": "openPreview" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "npm install && (test -f .env || cp .devcontainer/codespace.env .env)",
+  "postAttachCommand": { "server": "npm start" },
+  "customizations": {
+    "vscode": {
+      "extensions": ["mtxr.sqltools", "mtxr.sqltools-driver-pg", "esbenp.prettier-vscode"],
+      "settings": {
+        "sqltools.connections": [{
+          "name": "leetcode_lab (Codespace)", "driver": "PostgreSQL", "server": "localhost", "port": 5432,
+          "database": "leetcode_lab", "username": "postgres", "password": "postgres"
+        }]
+      }
+    }
+  }
+}

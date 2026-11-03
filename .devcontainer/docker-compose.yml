@@ -1,0 +1,24 @@
+# Two containers for GitHub Codespaces:
+#   app - Node.js 22, where the Express server runs
+#   db  - PostgreSQL 16, loaded automatically with ../db/*.sql on first start
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    network_mode: service:db        # app reaches PostgreSQL at localhost:5432
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres   # throw-away password for this private dev container only
+      POSTGRES_DB: leetcode_lab
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../db:/docker-entrypoint-initdb.d:ro   # runs 01_create_tables.sql then 02_insert_data.sql
+
+volumes:
+  pgdata:
