@@ -11,14 +11,16 @@ types.setTypeParser(1114, (v) => v);              // timestamp without time zone
 types.setTypeParser(20, (v) => Number(v));        // bigint (COUNT, BIGSERIAL ids)
 types.setTypeParser(1700, (v) => Number(v));      // numeric
 
-const useUrl = Boolean(process.env.DATABASE_URL);
+// DATABASE_URL (any hosted Postgres) wins; on Netlify, Netlify Database injects NETLIFY_DB_URL.
+const dbUrl = process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
+const useUrl = Boolean(dbUrl);
 // Hosted databases need SSL; a local URL (localhost / sslmode=disable) does not.
-const urlNeedsSsl = useUrl && !/localhost|127\.0\.0\.1|sslmode=disable/.test(process.env.DATABASE_URL);
+const urlNeedsSsl = useUrl && !/localhost|127\.0\.0\.1|sslmode=disable/.test(dbUrl);
 
 const pool = new Pool(
   useUrl
     ? {
-        connectionString: process.env.DATABASE_URL,
+        connectionString: dbUrl,
         ssl: urlNeedsSsl ? { rejectUnauthorized: false } : false,
         max: 3                                // small pool: serverless functions are short-lived
       }

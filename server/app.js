@@ -19,7 +19,7 @@ api.get('/health', async (req, res, next) => {
       `SELECT version() AS version, current_database() AS database, current_user AS db_user,
               (SELECT COUNT(*)::int FROM information_schema.tables WHERE table_schema = 'public') AS tables`);
     res.json({ ok: true, ...rows[0], as_of: AS_OF, ms: Date.now() - started,
-               mode: process.env.DATABASE_URL ? 'hosted (DATABASE_URL)' : 'local (PG* settings)' });
+               mode: (process.env.DATABASE_URL || process.env.NETLIFY_DB_URL) ? 'hosted (database URL)' : 'local (PG* settings)' });
   } catch (err) { next(err); }
 });
 
