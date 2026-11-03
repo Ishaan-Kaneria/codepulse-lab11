@@ -68,6 +68,13 @@ const Q = {
           JOIN problems p ON p.problem_id = s.problem_id
           ORDER BY s.submission_timestamp DESC LIMIT 8`
   },
+  'overview.pulse': {
+    srs: 'SRS 3',
+    sql: `SELECT s.submission_id AS id, s.verdict::text AS v,
+                 s.submission_timestamp::date::text AS d
+          FROM submissions s
+          ORDER BY s.submission_timestamp, s.submission_id`
+  },
   'overview.tables': {
     srs: 'Schema',
     sql: TABLES.map((t) => `SELECT '${t}' AS table_name, COUNT(*)::int AS row_count FROM ${t}`).join('\nUNION ALL\n') +

@@ -54,7 +54,7 @@ export const status = (s) => {
 };
 export const initials = (name) => esc((name || '?').split(/[_\s]/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join(''));
 
-export const VERDICT_COLORS = { AC: '#2a9d8f', WA: '#c0473a', TLE: '#e09f3e', MLE: '#7b4fb3', RE: '#a3364f', CE: '#8a8f98' };
+export const VERDICT_COLORS = { AC: 'var(--ac)', WA: 'var(--wa)', TLE: 'var(--tle)', MLE: 'var(--mle)', RE: 'var(--re)', CE: 'var(--ce)' };
 export const VERDICT_NAMES = { AC: 'Accepted', WA: 'Wrong Answer', TLE: 'Time Limit Exceeded', MLE: 'Memory Limit Exceeded', RE: 'Runtime Error', CE: 'Compile Error' };
 
 // ---------- tables -----------------------------------------------------------------
@@ -91,21 +91,27 @@ export function autoTable(rows, fields) {
 }
 
 // ---------- charts --------------------------------------------------------------------
-export function bars(items, { color = 'var(--saffron)', max, fmt = (v) => fmtNum(v), labelW } = {}) {
+export function bars(items, { color = 'var(--accent)', max, fmt = (v) => fmtNum(v), labelW } = {}) {
   const top = max ?? Math.max(...items.map((i) => i.value), 1);
   return `<div class="bars">${items.map((it, k) => `
     <div class="bar-row" ${labelW ? `style="grid-template-columns:${labelW}px 1fr 64px"` : ''}>
       <span class="lbl" title="${esc(it.label)}">${esc(it.label)}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${(100 * it.value) / top}%;background:${it.color || color};animation-delay:${k * 40}ms"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(100 * it.value) / top}%;background:${it.color || color}"></div></div>
       <span class="val">${fmt(it.value)}</span>
     </div>`).join('')}</div>`;
 }
 export function donut(items, centerValue, centerLabel) {
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
+  const R = 42, C = 2 * Math.PI * R, gap = items.length > 1 ? 1.6 : 0;
   let acc = 0;
-  const stops = items.map((i) => { const a = (acc / total) * 360; acc += i.value; return `${i.color} ${a}deg ${(acc / total) * 360}deg`; }).join(', ');
+  const arcs = items.map((i) => {
+    const len = Math.max(0, (i.value / total) * C - gap);
+    const seg = `<circle r="${R}" cx="50" cy="50" style="stroke:${i.color}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}"><title>${esc(i.label)}: ${fmtNum(i.value)}</title></circle>`;
+    acc += (i.value / total) * C;
+    return seg;
+  }).join('');
   return `<div class="donut-wrap">
-    <div class="donut" style="background:conic-gradient(${stops})"><div class="center"><div><b>${esc(centerValue)}</b><span>${esc(centerLabel)}</span></div></div></div>
+    <div class="donut"><svg viewBox="0 0 100 100" aria-hidden="true"><circle r="${R}" cx="50" cy="50" style="stroke:var(--sunk)"/>${arcs}</svg><div class="center"><div><b>${esc(centerValue)}</b><span>${esc(centerLabel)}</span></div></div></div>
     <div class="legend">${items.map((i) => `<div><i style="background:${i.color}"></i>${esc(i.label)}<b>${fmtNum(i.value)}</b> <span class="muted small">${((100 * i.value) / total).toFixed(1)}%</span></div>`).join('')}</div>
   </div>`;
 }
@@ -113,7 +119,7 @@ export function columns(items, { alt = false } = {}) {
   const top = Math.max(...items.map((i) => i.value), 1);
   return `<div class="cols">${items.map((i, k) => `
     <div class="col" title="${esc(i.label)}: ${fmtNum(i.value)}"><b>${esc(i.show ?? fmtNum(i.value))}</b>
-      <div class="stick ${alt ? 'alt' : ''}" style="height:${Math.max(3, (100 * i.value) / top) * 0.78}%;animation-delay:${k * 50}ms"></div>
+      <div class="stick ${alt ? 'alt' : ''}" style="height:${Math.max(3, (100 * i.value) / top) * 0.78}%"></div>
       <small>${esc(i.label)}</small></div>`).join('')}</div>`;
 }
 export function lineChart(points, { height = 190 } = {}) {
@@ -129,7 +135,7 @@ export function lineChart(points, { height = 190 } = {}) {
   const area = `${line} L${x(points.length - 1)},${H - P.b} L${x(0)},${H - P.b} Z`;
   const ticks = [0, 0.5, 1].map((t) => lo + t * (hi - lo));
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e09f3e" stop-opacity=".35"/><stop offset="1" stop-color="#e09f3e" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>
     ${ticks.map((t) => `<line class="grid-l" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/><text x="${P.l - 8}" y="${y(t) + 4}" text-anchor="end">${Math.round(t)}</text>`).join('')}
     <path class="area" d="${area}"/><path class="line" d="${line}"/>
     ${points.map((p, i) => `<circle class="pt" cx="${x(i)}" cy="${y(p.y)}" r="4"><title>${esc(p.label)}: ${p.y}</title></circle>`).join('')}
@@ -173,7 +179,7 @@ export function closeModal() { $('#modal').classList.remove('on'); $('#modal').s
 export function toast(msg, kind = '') {
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
-  el.innerHTML = msg;
+  el.innerHTML = `<div>${msg}</div>`;
   $('#toasts').appendChild(el);
   setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 4200);
 }

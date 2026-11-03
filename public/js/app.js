@@ -47,7 +47,7 @@ const SRS = [
 function renderNav(active) {
   $('#nav').innerHTML = NAV.map((n) => n.group
     ? `<div class="group">${esc(n.group)}</div>`
-    : `<a href="#/${n.id}" class="${n.id === active ? 'active' : ''}">${n.icon}<span>${esc(n.label)}</span>${n.srs ? `<span class="srs">SRS ${n.srs}</span>` : ''}</a>`).join('');
+    : `<a href="#/${n.id}" class="${n.id === active ? 'active' : ''}">${n.icon}<span>${esc(n.label)}</span>${n.srs ? `<span class="srs" title="SRS function ${n.srs.replace('·', ' and ')}">${n.srs.replace('·', ', ')}</span>` : ''}</a>`).join('');
 }
 
 function head({ title, srs = [], desc = '', sql = [], actions = '' }) {
@@ -63,8 +63,8 @@ function head({ title, srs = [], desc = '', sql = [], actions = '' }) {
 const card = (title, body, { sub = '', tools = '', flush = false, cls = '' } = {}) =>
   `<section class="card ${cls}"><div class="card-head"><h3>${title}</h3>${sub ? `<span class="sub">${sub}</span>` : ''}<div class="tools">${tools}</div></div>
    <div class="card-body ${flush ? 'flush' : ''}">${body}</div></section>`;
-const kpi = (label, value, note = '', accent = 'var(--saffron-soft)') =>
-  `<div class="card kpi" style="--accent-soft:${accent}"><span class="label">${esc(label)}</span><span class="value">${value}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
+const kpi = (label, value, note = '', accent = 'var(--accent)') =>
+  `<div class="card kpi" style="--kpi:${accent.replace('-soft', '')}"><span class="label">${esc(label)}</span><span class="value">${value}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
 const loading = '<div class="skeleton"></div><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:85%"></div>';
 
 // fill an element with the result of an async renderer, showing errors in place
@@ -76,66 +76,140 @@ async function fill(el, fn) {
 }
 
 // ---------------------------------------------------------------- Overview
+const VORDER = ['AC', 'WA', 'TLE', 'MLE', 'RE', 'CE'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 async function pageOverview(v) {
   v.innerHTML = `
-    <section class="hero fade-in">
-      <svg class="hero-wave" viewBox="0 0 340 120"><path d="M0 70h60l18-48 26 90 20-42h40l16-30 22 58 18-28h120"/></svg>
-      <div class="kicker">Team 25 · MC212 Database Management Systems</div>
-      <h1>LeetCode-style Practice Management System</h1>
-      <p>A live window into our PostgreSQL database: 42 normalised tables (BCNF), served through Node.js, Express and node-postgres.
-        Every number on this page is read from the database when the page opens.</p>
-      <div class="hero-grid" id="hero-stats">${'<div class="hero-stat"><b>…</b><span>&nbsp;</span></div>'.repeat(6)}</div>
+    <section class="pulse" aria-labelledby="pulse-title">
+      <div class="pulse-top">
+        <div>
+          <h1 id="pulse-title"><span class="count" id="pulse-count">Every</span> verdicts, each one a row in PostgreSQL.</h1>
+          <p>CodePulse is a LeetCode-style practice platform built on a 42-table BCNF schema. The strip below is every submission
+            the judge has scored, in the order it arrived. Point at a tick to see it, click to open its judge log.</p>
+        </div>
+        <div class="pulse-stats" id="hero-stats">${'<div><b>&nbsp;</b><span>&nbsp;</span></div>'.repeat(6)}</div>
+      </div>
+      <div class="tape-wrap">
+        <svg class="tape" id="tape" role="img" aria-label="Every submission in time order, coloured by verdict" preserveAspectRatio="none"></svg>
+        <div class="tape-axis" id="tape-axis"></div>
+        <div class="tape-legend" id="tape-legend"></div>
+      </div>
     </section>
-    <div class="grid g3 mb">
-      <div id="ov-verdicts"></div><div id="ov-diff"></div><div id="ov-lang"></div>
-    </div>
-    <div class="grid g-2-1 mb"><div id="ov-recent"></div><div id="ov-topics"></div></div>
-    ${card('What the database delivers', `<div class="srs-grid">${SRS.map((s) => `<a class="srs-card" href="#/${s.page}"><span class="no">SRS ${s.n}</span><b>${esc(s.t)}</b><span>${esc(s.d)}</span></a>`).join('')}</div>`,
-      { sub: 'The 12 product functions of SRS V6, each with its own screen' })}`;
+    <div class="grid g-2-1 mb"><div id="ov-recent"></div><div id="ov-verdicts"></div></div>
+    <div class="grid g3 mb"><div id="ov-diff"></div><div id="ov-lang"></div><div id="ov-topics"></div></div>
+    ${card('Twelve product functions, one screen each', `<div class="srs-grid">${SRS.map((s) => `<a class="srs-card" href="#/${s.page}"><span class="no">${s.n}</span><b>${esc(s.t)}</b><span>${esc(s.d)}</span></a>`).join('')}</div>`,
+      { flush: true, sub: 'from the SRS, version 6' })}`;
 
   fill('#hero-stats', async (el) => {
     const s = (await q('overview.stats')).rows[0];
     el.innerHTML = [
-      [fmtNum(s.users), 'registered users'], [fmtNum(s.problems), 'problems'], [fmtNum(s.submissions), 'submissions'],
-      [pct(s.acceptance_pct), 'acceptance rate'], [fmtNum(s.contests), 'contests'], [fmtNum(s.active_premium), 'active Premium']
-    ].map(([b, t]) => `<div class="hero-stat"><b>${b}</b><span>${t}</span></div>`).join('');
+      [fmtNum(s.users), 'registered users'], [fmtNum(s.problems), 'problems'], [pct(s.acceptance_pct), 'accepted'],
+      [fmtNum(s.contests), 'contests'], [fmtNum(s.posts), 'discussion posts'], [fmtNum(s.active_premium), 'active Premium plans']
+    ].map(([b, t]) => `<div><b>${b}</b><span>${t}</span></div>`).join('');
   });
+  drawTape();
   fill('#ov-verdicts', async (el) => {
-    const rows = (await q('overview.verdicts')).rows;
+    const rows = (await q('overview.verdicts')).rows.sort((a, b) => VORDER.indexOf(a.verdict) - VORDER.indexOf(b.verdict));
     const total = rows.reduce((s, r) => s + r.total, 0);
     const ac = rows.find((r) => r.verdict === 'AC')?.total || 0;
-    el.innerHTML = card('Verdicts', donut(rows.map((r) => ({ label: VERDICT_NAMES[r.verdict], value: r.total, color: VERDICT_COLORS[r.verdict] })), pct((100 * ac) / total), 'accepted'),
-      { sub: 'SRS 3', tools: `<button class="btn sm" data-sql='["overview.verdicts"]'>${icon.sql}</button>` });
+    el.innerHTML = card('Verdict mix', donut(rows.map((r) => ({ label: VERDICT_NAMES[r.verdict], value: r.total, color: VERDICT_COLORS[r.verdict] })), pct((100 * ac) / total), 'accepted'),
+      { sub: 'SRS 3', tools: `<button class="btn sm" data-sql='["overview.verdicts"]' aria-label="View SQL">${icon.sql}</button>` });
   });
   fill('#ov-diff', async (el) => {
     const rows = (await q('overview.difficulty')).rows;
     const color = { Easy: 'var(--easy)', Medium: 'var(--medium)', Hard: 'var(--hard)' };
     el.innerHTML = card('Problems by difficulty',
-      `${bars(rows.map((r) => ({ label: r.difficulty, value: r.problems, color: color[r.difficulty] })), { labelW: 80 })}
-       <div class="small muted" style="margin-top:14px">Average acceptance: ${rows.map((r) => `<b>${esc(r.difficulty)}</b> ${pct(r.avg_acceptance)}`).join(' · ')}</div>`,
-      { sub: 'SRS 1', tools: `<button class="btn sm" data-sql='["overview.difficulty"]'>${icon.sql}</button>` });
+      `${bars(rows.map((r) => ({ label: r.difficulty, value: r.problems, color: color[r.difficulty] })), { labelW: 72 })}
+       <div class="small muted" style="margin-top:14px">Average acceptance is ${rows.map((r) => `${pct(r.avg_acceptance)} for ${esc(r.difficulty.toLowerCase())}`).join(', ')}.</div>`,
+      { sub: 'SRS 1', tools: `<button class="btn sm" data-sql='["overview.difficulty"]' aria-label="View SQL">${icon.sql}</button>` });
   });
   fill('#ov-lang', async (el) => {
     const rows = (await q('overview.languages')).rows;
-    el.innerHTML = card('Languages', `${columns(rows.map((r) => ({ label: r.language, value: r.submissions })))}
-      <div class="small muted" style="margin-top:6px">${rows.map((r) => `<b>${esc(r.language)}</b> ${pct(r.ac_pct)} AC`).join(' · ')}</div>`,
-      { sub: 'submissions per language', tools: `<button class="btn sm" data-sql='["overview.languages"]'>${icon.sql}</button>` });
+    el.innerHTML = card('Languages', `${columns(rows.map((r) => ({ label: r.language, value: r.submissions })), { alt: true })}
+      <div class="small muted" style="margin-top:6px">${rows.map((r) => `${esc(r.language)} ${pct(r.ac_pct)}`).join(', ')} accepted.</div>`,
+      { sub: 'submissions', tools: `<button class="btn sm" data-sql='["overview.languages"]' aria-label="View SQL">${icon.sql}</button>` });
   });
   fill('#ov-recent', async (el) => {
     const rows = (await q('overview.recent')).rows;
     el.innerHTML = card('Latest submissions', table(rows, [
+      { label: 'Verdict', render: (r) => verdict(r.verdict) },
       { label: 'User', render: (r) => `<span class="strong">${esc(r.username)}</span>` },
-      { label: 'Problem', key: 'title' }, { label: 'Lang', key: 'language' },
-      { label: 'Verdict', render: (r) => verdict(r.verdict) }, { label: 'Runtime', num: true, render: (r) => (r.runtime_ms === null ? '—' : `${fmtNum(r.runtime_ms)} ms`) },
+      { label: 'Problem', wrap: true, render: (r) => `${esc(r.title)} <span class="muted small">${esc(r.language)}</span>` },
+      { label: 'Runtime', num: true, render: (r) => (r.runtime_ms === null ? '<span class="muted">none</span>' : `${fmtNum(r.runtime_ms)} ms`) },
       { label: 'When', render: (r) => fmtDate(r.submission_timestamp, true) }
-    ], { onRow: true }), { flush: true, sub: 'click a row for the judge log', tools: `<a class="btn sm" href="#/submissions">All ${icon.arrow}</a>` });
+    ], { onRow: true }), { flush: true, sub: 'open one to read its judge log', tools: `<a class="btn sm" href="#/submissions">All submissions</a>` });
     bindRows(el, rows, (r) => openSubmission(r.submission_id));
   });
   fill('#ov-topics', async (el) => {
     const rows = (await q('overview.topics')).rows;
-    el.innerHTML = card('Most-tagged topics', bars(rows.map((r) => ({ label: r.topic_name, value: r.problems })), { color: 'var(--teal)', labelW: 170 }),
+    el.innerHTML = card('Most-tagged topics', bars(rows.slice(0, 8).map((r) => ({ label: r.topic_name, value: r.problems })), { color: 'var(--violet)', labelW: 128 }),
       { sub: 'problem_topics' });
   });
+}
+
+async function drawTape() {
+  const svg = $('#tape'); if (!svg) return;
+  let rows;
+  try { rows = (await q('overview.pulse')).rows; } catch (e) { svg.outerHTML = errorBox(e); return; }
+  if (!$('#tape')) return;
+  const n = rows.length;
+  $('#pulse-count').textContent = fmtNum(n);
+  const W = 1000, H = 120, mid = H / 2, w = W / n;
+  const hidden = new Set();
+  const counts = Object.fromEntries(VORDER.map((k) => [k, 0]));
+  rows.forEach((r) => { counts[r.v] += 1; });
+  // a waveform: accepted code rises above the line, every failure drops below it
+  const amp = { AC: 0.94, WA: 0.92, RE: 0.8, TLE: 0.7, MLE: 0.6, CE: 0.46 };
+  const paint = () => {
+    svg.innerHTML = `<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="mid-line" vector-effect="non-scaling-stroke"/>
+      <g class="ticks">${rows.map((r, i) => {
+        if (hidden.has(r.v)) return '';
+        const h = (mid - 1) * amp[r.v];
+        const y = r.v === 'AC' ? mid - 1 - h : mid + 1;
+        return `<rect x="${(i * w).toFixed(3)}" y="${y.toFixed(1)}" width="${(w * 1.02).toFixed(3)}" height="${h.toFixed(1)}" style="fill:${VERDICT_COLORS[r.v]}"/>`;
+      }).join('')}</g>
+      <line class="hover-line" x1="0" x2="0" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/>`;
+  };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  paint();
+  svg.classList.add('draw');
+
+  // axis: first date, month starts, last date
+  const firstOf = {};
+  rows.forEach((r, i) => { const m = r.d.slice(0, 7); if (!(m in firstOf)) firstOf[m] = i; });
+  const months = Object.entries(firstOf);
+  const step = Math.max(1, Math.ceil(months.length / (svg.clientWidth < 600 ? 3 : 6)));
+  $('#tape-axis').innerHTML = months.filter((_, k) => k % step === 0)
+    .map(([m]) => `<span>${MONTHS[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}</span>`).join('') + `<span>${fmtDate(rows[n - 1].d)}</span>`;
+
+  $('#tape-legend').innerHTML = VORDER.map((k) => `<button aria-pressed="true" data-v="${k}" title="Show or hide ${esc(VERDICT_NAMES[k])}">
+      <i style="background:${VERDICT_COLORS[k]}"></i>${esc(VERDICT_NAMES[k])} <b>${fmtNum(counts[k])}</b></button>`).join('') +
+    '<span class="tape-hint">Click a verdict to hide it</span>';
+  $$('#tape-legend button').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.v;
+    if (hidden.has(k)) hidden.delete(k); else hidden.add(k);
+    b.setAttribute('aria-pressed', String(!hidden.has(k)));
+    svg.classList.remove('draw');
+    paint();
+  }));
+
+  const tip = $('#tip');
+  const at = (e) => {
+    const box = svg.getBoundingClientRect();
+    return Math.min(n - 1, Math.max(0, Math.floor(((e.clientX - box.left) / box.width) * n)));
+  };
+  svg.addEventListener('mousemove', (e) => {
+    const i = at(e); const r = rows[i];
+    const line = $('.hover-line', svg);
+    line.setAttribute('x1', i * w + w / 2); line.setAttribute('x2', i * w + w / 2); line.style.opacity = '.9';
+    tip.innerHTML = `${verdict(r.v)} <b>Submission #${r.id}</b><br><span class="muted">${esc(VERDICT_NAMES[r.v])}, ${fmtDate(r.d)}</span>`;
+    tip.classList.add('on');
+    const tx = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 10);
+    tip.style.left = `${tx}px`; tip.style.top = `${e.clientY + 16}px`;
+  });
+  svg.addEventListener('mouseleave', () => { tip.classList.remove('on'); const l = $('.hover-line', svg); if (l) l.style.opacity = '0'; });
+  svg.addEventListener('click', (e) => { tip.classList.remove('on'); openSubmission(rows[at(e)].id); });
 }
 
 // ---------------------------------------------------------------- Problems (CRUD)
@@ -462,7 +536,7 @@ async function pageSolvers(v, params) {
   search('');
   fill('#u-streaks', async (el) => {
     const rows = (await q('users.streak_leaders')).rows;
-    el.innerHTML = card('Longest live streaks', bars(rows.map((r) => ({ label: r.username, value: r.current_daily_streak })), { labelW: 120, color: 'var(--teal)', fmt: (x) => `${x} d` }), { sub: 'solvers.current_daily_streak' });
+    el.innerHTML = card('Longest live streaks', bars(rows.map((r) => ({ label: r.username, value: r.current_daily_streak })), { labelW: 120, color: 'var(--accent-2)', fmt: (x) => `${x} d` }), { sub: 'solvers.current_daily_streak' });
   });
   loadProfile(uid);
 }
@@ -524,7 +598,7 @@ async function pagePremium(v) {
     <div class="grid g2"><div id="pr-rules"></div><div id="pr-pay"></div></div>`;
   fill('#pr-sum', async (el) => {
     const rows = (await q('premium.summary')).rows;
-    const palette = ['#e09f3e', '#1b6f6a', '#9e2a2b', '#2c6e9b', '#5b3f8c', '#8a8f98', '#c8553d', '#2a9d8f'];
+    const palette = ['var(--accent)', 'var(--accent-2)', 'var(--violet)', 'var(--tle)', 'var(--re)', 'var(--ce)', 'var(--wa)', 'var(--ac)'];
     const total = rows.reduce((s, r) => s + r.subscriptions, 0);
     el.innerHTML = card('Subscriptions', donut(rows.map((r, i) => ({ label: `${r.tier} · ${r.status}`, value: r.subscriptions, color: palette[i % palette.length] })), total, 'records'), { sub: 'tier × status' });
   });
@@ -707,10 +781,10 @@ async function pageModeration(v) {
     const [queue, hist] = await Promise.all([q('moderation.queue'), q('moderation.history')]);
     const rows = queue.rows;
     const hrs = hist.rows.map((r) => r.hours_to_close);
-    $('#md-kpi').innerHTML = kpi('Waiting in queue', rows.length, 'reports with no review', 'var(--wine-soft)') +
-      kpi('Reviews (latest 40)', hist.rowCount, 'moderator_reviews', 'var(--teal-soft)') +
+    $('#md-kpi').innerHTML = kpi('Waiting in queue', rows.length, 'reports with no review', 'var(--danger-soft)') +
+      kpi('Reviews (latest 40)', hist.rowCount, 'moderator_reviews', 'var(--accent-2-soft)') +
       kpi('Avg. hours to close', (hrs.reduce((a, b) => a + b, 0) / (hrs.length || 1)).toFixed(1), 'report → review') +
-      kpi('Removed', hist.rows.filter((r) => r.decision === 'Removed').length, 'of the latest 40 decisions', 'var(--plum-soft)');
+      kpi('Removed', hist.rows.filter((r) => r.decision === 'Removed').length, 'of the latest 40 decisions', 'var(--violet-soft)');
     el.innerHTML = card('Review queue', table(rows, [
       { label: 'Report', render: (r) => `<span class="muted">#${r.report_id}</span>` },
       { label: 'Reason', render: (r) => `<span class="chip">${esc(r.reason.replace('_', ' '))}</span>` },
@@ -726,7 +800,7 @@ async function pageModeration(v) {
   });
   fill('#md-reasons', async (el) => {
     const rows = (await q('moderation.reasons')).rows;
-    el.innerHTML = card('Why posts get reported', `${bars(rows.map((r) => ({ label: r.reason.replace('_', ' '), value: r.reports })), { color: 'var(--wine)', labelW: 120 })}
+    el.innerHTML = card('Why posts get reported', `${bars(rows.map((r) => ({ label: r.reason.replace('_', ' '), value: r.reports })), { color: 'var(--danger)', labelW: 120 })}
       <div style="margin-top:14px">${table(rows, [{ label: 'Reason', render: (r) => esc(r.reason.replace('_', ' ')) }, { label: 'Removed', num: true, key: 'removed' }, { label: 'Kept', num: true, key: 'kept' }])}</div>`, { sub: 'flag_reports' });
   });
   fill('#md-work', async (el) => {
@@ -789,7 +863,7 @@ function loadPlan(list) {
     const rows = (await q('plans.enrolments', { plan_id: planId })).rows;
     el.innerHTML = card('Learners', table(rows, [
       { label: 'User', render: (r) => `<span class="strong">${esc(r.username)}</span><div class="small muted">${esc(r.goal || '')}</div>` },
-      { label: 'Progress', render: (r) => `<div class="bar-track" style="width:140px;display:inline-block;vertical-align:middle"><div class="bar-fill" style="width:${Math.min(100, (100 * r.current_day) / (r.total_days || 1))}%;background:var(--teal)"></div></div> <span class="small">${r.current_day}/${r.total_days}</span>` },
+      { label: 'Progress', render: (r) => `<div class="bar-track" style="width:140px;display:inline-block;vertical-align:middle"><div class="bar-fill" style="width:${Math.min(100, (100 * r.current_day) / (r.total_days || 1))}%;background:var(--accent-2)"></div></div> <span class="small">${r.current_day}/${r.total_days}</span>` },
       { label: 'Status', render: (r) => status(r.status) }, { label: 'Since', render: (r) => fmtDate(r.enrolment_date) }
     ], { empty: 'Nobody is enrolled in this plan.' }), { flush: true, sub: 'enrolments' });
   });
@@ -807,9 +881,9 @@ async function pageIntegrity(v) {
   fill('#in-kpi', async (el) => {
     const d = (await q('integrity.dedup')).rows[0];
     el.innerHTML = kpi('Submissions', fmtNum(d.submissions), 'rows in submissions') +
-      kpi('Unique code blobs', fmtNum(d.unique_code_blobs), `${fmtNum(d.submissions - d.unique_code_blobs)} duplicates stored once`, 'var(--teal-soft)') +
-      kpi('Shared hashes', fmtNum(d.hashes_shared_by_users), 'same code, different users', 'var(--wine-soft)') +
-      kpi('Storage saved', `${fmtNum(d.kb_without_dedup - d.stored_kb, 1)} KB`, `${fmtNum(d.stored_kb, 1)} KB kept instead of ${fmtNum(d.kb_without_dedup, 1)} KB`, 'var(--plum-soft)');
+      kpi('Unique code blobs', fmtNum(d.unique_code_blobs), `${fmtNum(d.submissions - d.unique_code_blobs)} duplicates stored once`, 'var(--accent-2-soft)') +
+      kpi('Shared hashes', fmtNum(d.hashes_shared_by_users), 'same code, different users', 'var(--danger-soft)') +
+      kpi('Storage saved', `${fmtNum(d.kb_without_dedup - d.stored_kb, 1)} KB`, `${fmtNum(d.stored_kb, 1)} KB kept instead of ${fmtNum(d.kb_without_dedup, 1)} KB`, 'var(--violet-soft)');
   });
   fill('#in-plag', async (el) => {
     const rows = (await q('integrity.plagiarism')).rows;
@@ -840,7 +914,7 @@ async function pageIntegrity(v) {
   });
   fill('#in-comp', async (el) => {
     const rows = (await q('integrity.compilers')).rows;
-    el.innerHTML = card('Compile errors by toolchain', bars(rows.map((r) => ({ label: `${r.language} · ${r.compiler_version}`, value: r.compile_errors })), { labelW: 220, color: 'var(--plum)' }), { sub: 'compiler_error_logs ⋈ failure_logs ⋈ submissions' });
+    el.innerHTML = card('Compile errors by toolchain', bars(rows.map((r) => ({ label: `${r.language} · ${r.compiler_version}`, value: r.compile_errors })), { labelW: 220, color: 'var(--violet)' }), { sub: 'compiler_error_logs ⋈ failure_logs ⋈ submissions' });
   });
 }
 
@@ -906,7 +980,7 @@ async function pageConnection(v) {
   fill('#cn-tables', async (el) => {
     const rows = (await q('overview.tables')).rows;
     const total = rows.reduce((s, r) => s + r.row_count, 0);
-    el.innerHTML = card(`All tables · ${fmtNum(total)} rows`, `<div class="grid g2">${[rows.slice(0, 21), rows.slice(21)].map((part) => bars(part.map((r) => ({ label: r.table_name, value: r.row_count })), { labelW: 170, max: rows[0].row_count, color: 'var(--teal)' })).join('')}</div>`, { sub: 'exact COUNT(*) per table' });
+    el.innerHTML = card(`All tables · ${fmtNum(total)} rows`, `<div class="grid g2">${[rows.slice(0, 21), rows.slice(21)].map((part) => bars(part.map((r) => ({ label: r.table_name, value: r.row_count })), { labelW: 170, max: rows[0].row_count, color: 'var(--accent-2)' })).join('')}</div>`, { sub: 'exact COUNT(*) per table' });
   });
 }
 
@@ -921,8 +995,7 @@ function route() {
   const id = PAGES[path] ? path : 'overview';
   renderNav(id);
   const item = NAV.find((n) => n.id === id);
-  $('#crumbs').innerHTML = `CodePulse / <b>${esc(item.label)}</b>`;
-  document.title = `${item.label} · CodePulse`;
+  document.title = id === 'overview' ? 'CodePulse' : `${item.label} | CodePulse`;
   closeDrawer(); closeModal();
   $('#sidebar').classList.remove('on'); $('#scrim').classList.remove('on');
   const view = $('#view');
@@ -954,11 +1027,70 @@ $('#theme-btn').addEventListener('click', () => {
 // connection badge
 api('/api/health').then((h) => {
   $('#conn').classList.add('ok');
-  $('#conn-text').textContent = `Live · ${h.database} · ${h.tables} tables`;
+  $('#conn-text').textContent = `Live, ${h.tables} tables in ${h.database}`;
 }).catch((e) => {
   $('#conn').classList.add('bad');
   $('#conn-text').textContent = 'Database not reachable';
   toast(`<b>Database not reachable.</b><br><span class="small">${esc(e.hint || e.message)}</span>`, 'bad');
+});
+
+// ---------------------------------------------------------------- command palette (Ctrl/Cmd + K, or /)
+const pal = { items: [], sel: 0, timer: null };
+function openPalette() {
+  $('#palette').classList.add('on'); $('#palette').setAttribute('aria-hidden', 'false');
+  const inp = $('#palette-q'); inp.value = ''; paletteSearch(''); setTimeout(() => inp.focus(), 20);
+}
+function closePalette() { $('#palette').classList.remove('on'); $('#palette').setAttribute('aria-hidden', 'true'); }
+function paletteRender() {
+  const list = $('#palette-list');
+  if (!pal.items.length) { list.innerHTML = '<div class="pempty">Nothing matches. Try a problem id such as 42, or a word from a title.</div>'; return; }
+  let group = '';
+  list.innerHTML = pal.items.map((it, i) => {
+    const g = it.group !== group ? `<div class="pgroup">${esc(it.group)}</div>` : '';
+    group = it.group;
+    return `${g}<div class="pitem ${i === pal.sel ? 'on' : ''}" role="option" aria-selected="${i === pal.sel}" data-i="${i}">${it.icon}<span>${it.html}</span><span class="pmeta">${it.meta || ''}</span></div>`;
+  }).join('');
+  $$('.pitem', list).forEach((el) => {
+    el.addEventListener('mousemove', () => { if (pal.sel !== Number(el.dataset.i)) { pal.sel = Number(el.dataset.i); paletteRender(); } });
+    el.addEventListener('click', () => paletteGo(Number(el.dataset.i)));
+  });
+  $('.pitem.on', list)?.scrollIntoView({ block: 'nearest' });
+}
+function paletteSearch(term) {
+  const t = term.trim().toLowerCase();
+  const screens = NAV.filter((n) => n.id && (!t || n.label.toLowerCase().includes(t) || n.id.includes(t)))
+    .map((n) => ({ group: 'Screens', icon: n.icon, html: esc(n.label), meta: n.srs ? `SRS ${n.srs.replace('·', ', ')}` : '', go: () => { location.hash = `#/${n.id}`; } }));
+  pal.items = screens; pal.sel = 0; paletteRender();
+  clearTimeout(pal.timer);
+  if (!t) return;
+  pal.timer = setTimeout(async () => {
+    try {
+      const data = await api(`/api/problems?${new URLSearchParams({ q: term.trim(), size: 8 })}`);
+      if ($('#palette-q').value.trim().toLowerCase() !== t) return;
+      pal.items = screens.concat(data.rows.map((r) => ({
+        group: 'Problems', icon: NAV.find((n) => n.id === 'problems').icon,
+        html: `${esc(r.title)} <span class="muted small">#${r.problem_id}</span>`, meta: diff(r.difficulty),
+        go: () => { if (!location.hash.startsWith('#/problems')) location.hash = '#/problems'; setTimeout(() => openProblem(r.problem_id), 60); }
+      })));
+      paletteRender();
+    } catch { /* screens still work without the API */ }
+  }, 160);
+}
+function paletteGo(i) { const it = pal.items[i]; if (!it) return; closePalette(); it.go(); }
+$('#palette-q').addEventListener('input', (e) => paletteSearch(e.target.value));
+$('#palette-q').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); pal.sel = Math.min(pal.items.length - 1, pal.sel + 1); paletteRender(); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); pal.sel = Math.max(0, pal.sel - 1); paletteRender(); }
+  if (e.key === 'Enter') { e.preventDefault(); paletteGo(pal.sel); }
+});
+$('#palette').addEventListener('click', (e) => { if (e.target.id === 'palette') closePalette(); });
+$('#jump-btn').addEventListener('click', openPalette);
+if (/Mac|iPhone|iPad/.test(navigator.platform)) $('#jump-kbd').textContent = '⌘ K';
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
+  if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('#palette').classList.contains('on') ? closePalette() : openPalette(); }
+  else if (e.key === '/' && !typing) { e.preventDefault(); openPalette(); }
+  else if (e.key === 'Escape') closePalette();
 });
 
 window.addEventListener('hashchange', route);
